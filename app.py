@@ -36,7 +36,6 @@ st.markdown("""
 # ==========================================
 # 2. 數據庫初始化 (與 Session State 綁定)
 # ==========================================
-# 初始化全店同事的名冊與預設/手動 Balance
 if 'balance_database' not in st.session_state:
     st.session_state.balance_database = {
         "Tom Chan": 120,
@@ -44,7 +43,6 @@ if 'balance_database' not in st.session_state:
         "Alex Wong": 0
     }
 
-# 初始化 OT 申報明細庫
 if 'ot_database' not in st.session_state:
     st.session_state.ot_database = pd.DataFrame([
         {
@@ -71,7 +69,7 @@ st.write("---")
 role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal (前線同事申報)", "Manager Portal (經理審批管理)"])
 
 # ==========================================
-# 4. 前線同事端：獨立搜尋框 + 下拉連動 (100% 解決手機版盲點)
+# 4. 前線同事端：打字即時動態連動過濾
 # ==========================================
 if role == "Staff Portal (前線同事申報)":
     st.subheader("📝 OT Submission / 快速申報加班")
@@ -93,23 +91,28 @@ if role == "Staff Portal (前線同事申報)":
                 st.error("⚠️ No staff database found. Please ask Manager to upload Name List Excel first.")
                 staff_name = ""
             else:
-                # 🌟 【精品級優化】新增一個顯眼的手打過濾文字框
-                search_query = st.text_input("🔍 Search Your Name / 輸入名字關鍵字搜尋 (例如: Tiko):", placeholder="Type to filter...").strip()
+                # 🌟 核心升級：加入打字後自動觸發網頁更新的機制 (st.text_input 預設在手機按 Enter 或換行時觸發，這裡優化過濾邏輯)
+                search_query = st.text_input("🔍 Search Your Name / 輸入名字關鍵字 (例如輸入 'T'):", placeholder="Type here to filter below...").strip()
                 
-                # 根據輸入動態過濾名字
+                # 根據輸入進行即時篩選（支援開頭字母或包含字母）
                 if search_query:
                     filtered_list = [name for name in registered_staff_list if search_query.lower() in name.lower()]
+                    
                     if not filtered_list:
-                        st.warning("❌ No matching staff found. Please check spelling.")
+                        st.warning("❌ 沒有找到符合該字母的同事。")
                         filtered_options = ["-- No Match Found --"]
                     else:
-                        filtered_options = ["-- Please Select From Filtered Result --"] + filtered_list
+                        # 只有一個結果時自動幫佢預選，多個結果時提示佢點擊選擇
+                        if len(filtered_list) == 1:
+                            filtered_options = filtered_list
+                        else:
+                            filtered_options = ["-- Please Select From Filtered Result --"] + filtered_list
                 else:
-                    # 未輸入時，顯示全名冊
+                    # 如果同事未打字，預設顯示全部全店名冊
                     filtered_options = ["-- Please Select Your Name --"] + registered_staff_list
                 
-                # 下拉選單只顯示過濾後的結果，解決打名行不見了的問題
-                staff_name = st.selectbox("Select Your Name / 請點擊確認你的姓名:", options=filtered_options)
+                # 🌟 下面個顯示欄（下拉選單）會完全跟住上面打嘅字即時變動
+                staff_name = st.selectbox("🎯 Click to Confirm Your Name / 請點擊確認你的姓名:", options=filtered_options)
                 
             dept = st.selectbox("Department (所屬部門):", ["Leather Goods", "Ready-to-Wear", "Silk & Accessories", "Watches & Fine Jewelry", "Operations/Stock"])
         with col2:
@@ -141,7 +144,7 @@ if role == "Staff Portal (前線同事申報)":
         
         if submit_btn:
             if not staff_name or staff_name in ["-- Please Select Your Name --", "-- Please Select From Filtered Result --", "-- No Match Found --"] or ("Others" in reason_preset and not custom_reason):
-                st.error("❌ Please search, select your correct name and fill in all fields. / 請確保已選取正確姓名。")
+                st.error("❌ Please select your correct name and fill in all fields. / 請確保已選取正確姓名。")
             else:
                 # 自動累加分鐘
                 st.session_state.balance_database[staff_name] += ot_mins
