@@ -4,17 +4,14 @@ from datetime import datetime
 import io
 
 # ==========================================
-# 1. 奢華視覺風格設定 (Classic Luxury White Style)
+# 1. Style & Config (Classic Luxury White)
 # ==========================================
-st.set_page_config(page_title="Hermès Store 96 - OT Portal", page_icon="🍊", layout="centered")
+st.set_page_config(page_title="Hermès Store 96 - OT & Balance Portal", page_icon="🍊", layout="centered")
 
-# 低調奢華之灰白背景 + 愛馬仕橙點綴
 st.markdown("""
     <style>
     .stApp { background-color: #F8F9FA; }
     h1, h2, h3 { color: #F37021 !important; font-family: 'Helvetica Neue', Arial, sans-serif; }
-    
-    /* 愛馬仕橙色大按鈕 */
     div.stButton > button:first-child {
         background-color: #F37021;
         color: white;
@@ -24,11 +21,7 @@ st.markdown("""
         padding: 10px 20px;
         width: 100%;
     }
-    div.stButton > button:first-child:hover {
-        background-color: #D65A18;
-    }
-    
-    /* 卡片式容器 */
+    div.stButton > button:first-child:hover { background-color: #D65A18; }
     .luxury-card {
         background-color: white;
         padding: 20px;
@@ -41,8 +34,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 數據庫初始化
+# 2. 數據庫初始化 (與 Session State 綁定)
 # ==========================================
+# 初始化全店同事的名冊與預設/手動 Balance
+if 'balance_database' not in st.session_state:
+    st.session_state.balance_database = {
+        "Tom Chan": 120,
+        "Tiko Poon": 60,
+        "Alex Wong": 0
+    }
+
+# 初始化 OT 申報明細庫
 if 'ot_database' not in st.session_state:
     st.session_state.ot_database = pd.DataFrame([
         {
@@ -51,9 +53,10 @@ if 'ot_database' not in st.session_state:
             "Employee Name": "Tom Chan",
             "Department": "Leather Goods",
             "OT Duration (Minutes)": 90,
-            "Reason / Details": "VIP Client Service Extension (Hermes Kelly Order)",
-            "Approved By": "Store Manager (Alex W.)",
+            "Reason / Details": "VIP Client Service Extension",
+            "Approved By": "Store Manager",
             "Approval Status": "Approved",
+            "Current OT Balance (Mins)": 120,
             "Submission Time": "2026-06-05 21:00"
         }
     ])
@@ -62,34 +65,50 @@ if 'ot_database' not in st.session_state:
 # 3. 導航介面
 # ==========================================
 st.title("🍊 HERMÈS STORE 96 - O.T. PORTAL")
-st.caption("Elegant Workforce Efficiency Management System")
+st.caption("Elegant Name List Integration & Auto-Complete OT System")
 st.write("---")
 
 role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal (前線同事申報)", "Manager Portal (經理審批管理)"])
 
 # ==========================================
-# 4. 前線同事快速申報端 (全 15 分鐘遞增單位)
+# 4. 前線同事端：升級為「智能打字感應選單」
 # ==========================================
 if role == "Staff Portal (前線同事申報)":
     st.subheader("📝 OT Submission / 快速申報加班")
     
-    # 🌟 升級：全部嚴格以 15 分鐘為單位，一直加到 500 分鐘為止
     minute_options = [
         15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180, 195, 210, 225, 240, 
         255, 270, 285, 300, 315, 330, 345, 360, 375, 390, 405, 420, 435, 450, 465, 480, 495, 500
     ]
+    
+    # 從目前的 Balance 數據庫中動態抓取「所有已登記同事嘅英文名」作為選單基礎
+    registered_staff_list = sorted(list(st.session_state.balance_database.keys()))
     
     with st.container():
         st.write('<div class="luxury-card">', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            staff_name = st.text_input("Employee Name (英文全名):", placeholder="e.g. Tiko Poon")
+            # 🌟 核心升級：將手打 Text Input 換成可手打過濾、自動感應的 selectbox
+            # 如果名冊為空，會提示經理先匯入
+            if not registered_staff_list:
+                st.error("⚠️ No staff database found. Please ask Manager to upload Name List Excel first.")
+                staff_name = ""
+            else:
+                staff_name = st.selectbox(
+                    "Select Your Name / 請選擇你的姓名 (可直接打英文字母搜尋):", 
+                    options=["-- Please Select Your Name --"] + registered_staff_list
+                )
+                
             dept = st.selectbox("Department (所屬部門):", ["Leather Goods", "Ready-to-Wear", "Silk & Accessories", "Watches & Fine Jewelry", "Operations/Stock"])
         with col2:
             ot_date = st.date_input("OT Date (加班日期):", max_value=datetime.today())
-            # 預設維持 30 分鐘 (index=1)
             ot_mins = st.selectbox("OT Duration (加班分鐘):", minute_options, index=1)
+            
+        # 實時顯示選中同事目前的 Balance 狀況
+        if staff_name and staff_name != "-- Please Select Your Name --":
+            current_bal = st.session_state.balance_database[staff_name]
+            st.info(f"💡 Hello {staff_name}! Your current OT Balance before this submission is: **{current_bal} Mins** ({current_bal/60:.1f} Hours)")
         
         reason_preset = st.radio(
             "Quick Reason Select / 加班原因快捷鍵:", 
@@ -110,9 +129,13 @@ if role == "Staff Portal (前線同事申報)":
         submit_btn = st.button("Submit Request / 確認提交")
         
         if submit_btn:
-            if not staff_name or ("Others" in reason_preset and not custom_reason):
-                st.error("❌ Please fill in all fields before submission. / 請填妥所有欄位。")
+            if not staff_name or staff_name == "-- Please Select Your Name --" or ("Others" in reason_preset and not custom_reason):
+                st.error("❌ Please select your name and fill in all fields. / 請選擇姓名並填妥欄位。")
             else:
+                # 自動累加分鐘
+                st.session_state.balance_database[staff_name] += ot_mins
+                updated_bal = st.session_state.balance_database[staff_name]
+                
                 new_id = f"OT-2026-{len(st.session_state.ot_database) + 1:04d}"
                 new_data = {
                     "Submission ID": new_id,
@@ -123,15 +146,17 @@ if role == "Staff Portal (前線同事申報)":
                     "Reason / Details": custom_reason,
                     "Approved By": "Pending Approval",
                     "Approval Status": "Pending",
+                    "Current OT Balance (Mins)": updated_bal,
                     "Submission Time": datetime.now().strftime("%Y-%m-%d %H:%M")
                 }
                 st.session_state.ot_database = pd.concat([st.session_state.ot_database, pd.DataFrame([new_data])], ignore_index=True)
-                st.success("🎉 Submitted successfully! / 提交成功！")
+                st.success(f"🎉 Submitted successfully! Your updated OT Balance is now: {updated_bal} Mins.")
+                st.rerun()
                 
         st.write('</div>', unsafe_allow_html=True)
 
 # ==========================================
-# 5. 經理管理/一鍵審批與全英文 Excel 匯出
+# 5. 經理管理端：新增「Excel 批次上傳全店名冊」
 # ==========================================
 else:
     st.subheader("🔑 Manager Operations & HR Export Portal")
@@ -140,19 +165,78 @@ else:
     if password == "hermes96":
         st.success("🔓 Authenticated Successfully - Store 96 Operations")
         
-        df = st.session_state.ot_database
-        pending_count = len(df[df["Approval Status"] == "Pending"])
-        total_mins = df[df["Approval Status"] == "Approved"]["OT Duration (Minutes)"].sum()
+        # ──────────────────────────────────────────
+        # 🌟 核心全新功能：經理上傳 Excel 名冊與初始 Balance
+        # ──────────────────────────────────────────
+        st.write("---")
+        st.write("### 📥 Bulk Import Staff Name List / 批次上傳全店名冊 Excel")
         
-        col_m1, col_m2 = st.columns(2)
-        with col_m1:
-            st.metric(label="⏳ Pending Approval / 待處理審批", value=f"{pending_count} Requests")
-        with col_m2:
-            st.metric(label="📊 Approved OT This Month", value=f"{total_mins} Mins ({total_mins/60:.1f} Hours)")
+        # 提供格式說明，等經理知道 Excel 點整
+        with st.expander("💡 View Excel File Template / 查看 Excel 製作格式說明"):
+            st.write("請製作一個包含兩行欄位的 Excel 檔案（格式如下），即可一鍵匯入全店 96 人：")
+            template_df = pd.DataFrame([
+                {"Employee": "Tiko Poon", "Initial Balance (Mins)": 60},
+                {"Employee": "Angelababy Wong", "Initial Balance (Mins)": 0},
+                {"Employee": "David Beckham", "Initial Balance (Mins)": 15}
+            ])
+            st.dataframe(template_df)
+            st.caption("註：欄位英文字母必須 100% 相同（Employee、Initial Balance (Mins)）。")
+
+        # 手機上傳 Excel 檔案組件
+        uploaded_excel = st.file_uploader("Upload Store Staff List Excel (.xlsx):", type=["xlsx"])
+        
+        if uploaded_excel is not None:
+            try:
+                # 讀取經理上傳的 Excel
+                input_df = pd.read_excel(uploaded_excel)
+                
+                if "Employee" in input_df.columns and "Initial Balance (Mins)" in input_df.columns:
+                    # 清空現有測試 Balance 庫，全面套用 Excel 內的名冊
+                    new_balances = {}
+                    for _, row in input_df.iterrows():
+                        name = str(row["Employee"]).strip()
+                        bal = int(row["Initial Balance (Mins)"])
+                        if name and name != "nan":
+                            new_balances[name] = bal
+                    
+                    st.session_state.balance_database = new_balances
+                    st.success(f"🎉 Successfully imported {len(new_balances)} employees from Excel! Frontline portal menu updated.")
+                    st.rerun()
+                else:
+                    st.error("❌ Invalid Excel format. Please ensure the column names are precisely 'Employee' and 'Initial Balance (Mins)'.")
+            except Exception as e:
+                st.error(f"❌ Error processing file: {str(e)}")
+
+        # ──────────────────────────────────────────
+        # 手動單個修改 Balance
+        # ──────────────────────────────────────────
+        st.write("---")
+        st.write("### ⚙️ Adjust Single Balance / 手動個別修正餘額")
+        
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            target_staff = st.text_input("Enter Employee Name (手動更新此人餘額):").strip()
+        with col_b2:
+            new_balance_input = st.number_input("Set New OT Balance (Minutes):", min_value=0, value=0, step=15)
             
+        if st.button("💾 Update / 儲存更新"):
+            if target_staff:
+                st.session_state.balance_database[target_staff] = new_balance_input
+                st.success(f"✅ Successfully updated {target_staff}'s balance to {new_balance_input} Mins!")
+                st.rerun()
+                
+        # 展示目前所有人的假總數
+        st.write("**Current Store 96 Employee & Balance Directory:**")
+        balance_df_show = pd.DataFrame([{"Employee": k, "OT Balance (Mins)": v, "In Hours": f"{v/60:.1f} Hrs"} for k, v in st.session_state.balance_database.items()])
+        st.dataframe(balance_df_show, use_container_width=True)
+        
+        # ──────────────────────────────────────────
+        # 審批明細與 Excel 匯出
+        # ──────────────────────────────────────────
         st.write("---")
         st.write("### 📥 Pending Requests List")
         
+        df = st.session_state.ot_database
         pending_df = df[df["Approval Status"] == "Pending"]
         
         if pending_df.empty:
@@ -177,15 +261,16 @@ else:
         st.write("### 📊 Master Database")
         st.dataframe(st.session_state.ot_database)
         
-        # Excel 匯出
+        # 匯出綜合 Excel
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             st.session_state.ot_database.to_excel(writer, sheet_name="OT_Summary", index=False)
+            balance_df_show.to_excel(writer, sheet_name="Employee_Balances", index=False)
                 
         st.download_button(
             label="📥 Export English Excel Report for HR",
             data=buffer.getvalue(),
-            file_name=f"Hermes_Store96_OT_Export.xlsx",
+            file_name=f"Hermes_Store96_OT_Master.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
         
