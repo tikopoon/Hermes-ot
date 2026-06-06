@@ -69,7 +69,7 @@ st.write("---")
 role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal (前線同事申報)", "Manager Portal (經理審批管理)"])
 
 # ==========================================
-# 4. 前線同事端：打字即時動態連動過濾
+# 4. 前線同事端：完美「合體單一欄位」自動提示
 # ==========================================
 if role == "Staff Portal (前線同事申報)":
     st.subheader("📝 OT Submission / 快速申報加班")
@@ -91,28 +91,25 @@ if role == "Staff Portal (前線同事申報)":
                 st.error("⚠️ No staff database found. Please ask Manager to upload Name List Excel first.")
                 staff_name = ""
             else:
-                # 🌟 核心升級：加入打字後自動觸發網頁更新的機制 (st.text_input 預設在手機按 Enter 或換行時觸發，這裡優化過濾邏輯)
-                search_query = st.text_input("🔍 Search Your Name / 輸入名字關鍵字 (例如輸入 'T'):", placeholder="Type here to filter below...").strip()
+                # 🌟 完美解決方案：將輸入框與 HTML5 的 datalist 自適應綁定！
+                # 呢度用手寫 HTML 注入，創造出【得一欄、打字下方自動跳人名選單】嘅頂級手機效果
+                search_input = st.text_input("Employee Name / 姓名 (打字會自動跳出名字提示):", placeholder="e.g. Tiko Poon").strip()
                 
-                # 根據輸入進行即時篩選（支援開頭字母或包含字母）
-                if search_query:
-                    filtered_list = [name for name in registered_staff_list if search_query.lower() in name.lower()]
-                    
-                    if not filtered_list:
-                        st.warning("❌ 沒有找到符合該字母的同事。")
-                        filtered_options = ["-- No Match Found --"]
-                    else:
-                        # 只有一個結果時自動幫佢預選，多個結果時提示佢點擊選擇
-                        if len(filtered_list) == 1:
-                            filtered_options = filtered_list
-                        else:
-                            filtered_options = ["-- Please Select From Filtered Result --"] + filtered_list
-                else:
-                    # 如果同事未打字，預設顯示全部全店名冊
-                    filtered_options = ["-- Please Select Your Name --"] + registered_staff_list
+                # 在後台動態生成 HTML5 提示清單
+                datalist_options = "".join([f'<option value="{name}">' for name in registered_staff_list])
+                st.markdown(f'<datalist id="staff_names">{datalist_options}</datalist>', unsafe_allow_html=True)
                 
-                # 🌟 下面個顯示欄（下拉選單）會完全跟住上面打嘅字即時變動
-                staff_name = st.selectbox("🎯 Click to Confirm Your Name / 請點擊確認你的姓名:", options=filtered_options)
+                # 透過 JavaScript 實時把這個清單綁定到 Streamlit 唯一的文字框上
+                st.markdown("""
+                    <script>
+                    var inputs = window.parent.document.querySelectorAll('input[aria-label*="打字會自動跳出名字提示"]');
+                    inputs.forEach(function(input) {
+                        input.setAttribute("list", "staff_names");
+                    });
+                    </script>
+                """, unsafe_allow_html=True)
+                
+                staff_name = search_input
                 
             dept = st.selectbox("Department (所屬部門):", ["Leather Goods", "Ready-to-Wear", "Silk & Accessories", "Watches & Fine Jewelry", "Operations/Stock"])
         with col2:
@@ -120,9 +117,11 @@ if role == "Staff Portal (前線同事申報)":
             ot_mins = st.selectbox("OT Duration (加班分鐘):", minute_options, index=1)
             
         # 實時顯示選中同事目前的 Balance 狀況
-        if staff_name and staff_name not in ["-- Please Select Your Name --", "-- Please Select From Filtered Result --", "-- No Match Found --"]:
+        if staff_name in st.session_state.balance_database:
             current_bal = st.session_state.balance_database[staff_name]
             st.info(f"💡 Hello {staff_name}! Your current OT Balance before this submission is: **{current_bal} Mins** ({current_bal/60:.1f} Hours)")
+        elif staff_name != "":
+            st.warning(f"⚠️ '{staff_name}' is not matched in the current store registry. Please ensure accuracy.")
         
         reason_preset = st.radio(
             "Quick Reason Select / 加班原因快捷鍵:", 
@@ -143,8 +142,8 @@ if role == "Staff Portal (前線同事申報)":
         submit_btn = st.button("Submit Request / 確認提交")
         
         if submit_btn:
-            if not staff_name or staff_name in ["-- Please Select Your Name --", "-- Please Select From Filtered Result --", "-- No Match Found --"] or ("Others" in reason_preset and not custom_reason):
-                st.error("❌ Please select your correct name and fill in all fields. / 請確保已選取正確姓名。")
+            if not staff_name or staff_name not in st.session_state.balance_database or ("Others" in reason_preset and not custom_reason):
+                st.error("❌ Please input a valid registered employee name and fill all fields. / 請確保姓名正確並在全店名冊內。")
             else:
                 # 自動累加分鐘
                 st.session_state.balance_database[staff_name] += ot_mins
