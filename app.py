@@ -46,11 +46,11 @@ if 'balance_database' not in st.session_state:
 if 'ot_database' not in st.session_state:
     st.session_state.ot_database = pd.DataFrame([
         {
-            "Submission ID": "OT-2026-0001",
+            "Submission ID": "OTCO-2026-0001",
             "Date": "2026-06-05",
             "Employee Name": "Tom Chan",
             "Department": "Leather Goods",
-            "OT / CO Type": "OT (加班)",
+            "OT / CO Type": "OT",
             "Duration (Minutes)": 90,
             "Reason / Details": "VIP Client Service Extension",
             "Approved By": "Store Manager",
@@ -73,28 +73,26 @@ st.write("---")
 role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal (前線同事申報)", "Manager Portal (經理審批管理)"])
 
 # ==========================================
-# 4. 前線同事端：OT/CO 雙向申報系統
+# 4. 前線同事端
 # ==========================================
 if role == "Staff Portal (前線同事申報)":
     st.subheader("📝 OT / CO Submission (快速申報加班/補鐘放假)")
     
-    # 🌟 生成包含負數和正數、以15分鐘為單位的選單
-    # 負數從 -450 遞增到 -15，正數從 15 遞增到 500
+    # 生成包含負數和正數、以15分鐘為單位的選單
     negative_options = list(range(-450, 0, 15))
     positive_options = list(range(15, 510, 15))
     if positive_options[-1] > 500:
         positive_options[-1] = 500
-    
-    # 組合選項，並設定預設指引（正數為 OT，負數為 CO 補鐘）
+        
     minute_options = negative_options + positive_options
     
-    # 格式化顯示，讓同事在下拉選單中看得非常清楚
+    # 🌟 滿足需求：極簡顯示格式，只保留 「+數字 Mins (OT)」與「-數字 Mins (CO)」
     display_labels = {}
     for mins in minute_options:
         if mins > 0:
-            display_labels[mins] = f"➕ +{mins} Mins (OT 加班 / 增加餘額) ~ {mins/60:.1f} Hrs"
+            display_labels[mins] = f"+{mins} Mins (OT)"
         else:
-            display_labels[mins] = f"➖ {mins} Mins (CO 補鐘放假 / 扣減餘額) ~ {abs(mins)/60:.1f} Hrs"
+            display_labels[mins] = f"{mins} Mins (CO)"
 
     registered_staff_list = sorted(list(st.session_state.balance_database.keys()))
     
@@ -107,14 +105,12 @@ if role == "Staff Portal (前線同事申報)":
                 st.error("⚠️ No staff database found. Please ask Manager to upload Name List Excel first.")
                 staff_name = ""
             else:
-                # 智能輸入框：手機 100% 彈出鍵盤
                 typed_name = st.text_input(
                     "Employee Name / 姓名 (在此輸入字母，下方會自動跳出對應人名):", 
                     value=st.session_state.selected_staff,
                     placeholder="Type to search (e.g. T)"
                 )
                 
-                # 智能動態氣泡過濾
                 if typed_name:
                     matches = [name for name in registered_staff_list if typed_name.lower() in name.lower()]
                     if matches and (len(matches) > 1 or matches[0] != typed_name):
@@ -135,22 +131,20 @@ if role == "Staff Portal (前線同事申報)":
         with col2:
             ot_date = st.date_input("OT / CO Date (日期):", max_value=datetime.today())
             
-            # 🌟 滿足需求：將 Title 變做 "OT/CO 申請"，並支援滑動碌上去揀負數
+            # 簡潔版選單
             selected_mins = st.selectbox(
                 "OT / CO 申請 (下拉往上滑可選擇負數補鐘):", 
                 options=minute_options, 
-                index=len(negative_options), # 預設停在第一個正數（+15分鐘）
+                index=len(negative_options), # 預設停在第一個正數（+15 Mins (OT)）
                 format_func=lambda x: display_labels[x]
             )
             
-        # 實時顯示選中同事目前的 Balance 狀況
         if staff_name in st.session_state.balance_database:
             current_bal = st.session_state.balance_database[staff_name]
             st.info(f"💡 Hello {staff_name}! Your current Balance before this submission is: **{current_bal} Mins** ({current_bal/60:.1f} Hours)")
             
-            # 💡 安全防呆：如果選負數（CO），但同事不夠假扣，提早發出溫馨提示
             if selected_mins < 0 and current_bal + selected_mins < 0:
-                st.warning(f"⚠️ Warning: You are requesting to deduct {abs(selected_mins)} mins, but you only have {current_bal} mins left. (餘額將會變成負數)")
+                st.warning(f"⚠️ Warning: 餘額將會變成負數")
         
         reason_preset = st.radio(
             "Quick Reason Select / 原因快捷鍵:", 
@@ -174,11 +168,10 @@ if role == "Staff Portal (前線同事申報)":
             if not staff_name or staff_name not in st.session_state.balance_database or ("Others" in reason_preset and not custom_reason):
                 st.error("❌ Please input or click a valid employee name. / 請確保姓名正確。")
             else:
-                # 🌟 核心數據連動：直接加上選擇的分鐘（加正數等於 OT 增加；加負數等於 CO 扣減）
                 st.session_state.balance_database[staff_name] += selected_mins
                 updated_bal = st.session_state.balance_database[staff_name]
                 
-                submission_type = "OT (加班)" if selected_mins > 0 else "CO (補鐘)"
+                submission_type = "OT" if selected_mins > 0 else "CO"
                 new_id = f"OTCO-2026-{len(st.session_state.ot_database) + 1:04d}"
                 new_data = {
                     "Submission ID": new_id,
@@ -233,7 +226,6 @@ else:
             except Exception as e:
                 st.error(f"❌ Error: {str(e)}")
 
-        # 手動單個修改 Balance
         st.write("---")
         st.write("### ⚙️ Adjust Single Balance")
         col_b1, col_b2 = st.columns(2)
@@ -261,13 +253,12 @@ else:
             st.info("Perfect! No pending OT/CO approvals at the moment.")
         else:
             for index, row in pending_df.iterrows():
-                # 根據正負數優雅地在後台顯示是加班還是放假
                 type_color = "🔴" if row['Duration (Minutes)'] < 0 else "🟢"
                 st.write(f"""
                 <div class="luxury-card">
                     <strong>👤 Employee:</strong> {row['Employee Name']} ({row['Department']})<br>
                     <strong>📋 Type:</strong> {type_color} {row['OT / CO Type']} <br>
-                    <strong>⏰ Duration:</strong> {row['Duration (Minutes)']} Mins ({row['Duration (Minutes)']/60:.1f} Hrs)<br>
+                    <strong>⏰ Duration:</strong> {row['Duration (Minutes)']} Mins <br>
                     <strong>💡 Details:</strong> {row['Reason / Details']}
                 </div>
                 """, unsafe_allow_html=True)
@@ -281,7 +272,6 @@ else:
         st.write("### 📊 Master Database")
         st.dataframe(st.session_state.ot_database)
         
-        # 匯出綜合 Excel
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             st.session_state.ot_database.to_excel(writer, sheet_name="OT_CO_Summary", index=False)
