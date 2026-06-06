@@ -71,7 +71,7 @@ st.write("---")
 role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal (前線同事申報)", "Manager Portal (經理審批管理)"])
 
 # ==========================================
-# 4. 前線同事端：升級為「智能打字感應選單」
+# 4. 前線同事端：獨立搜尋框 + 下拉連動 (100% 解決手機版盲點)
 # ==========================================
 if role == "Staff Portal (前線同事申報)":
     st.subheader("📝 OT Submission / 快速申報加班")
@@ -81,7 +81,7 @@ if role == "Staff Portal (前線同事申報)":
         255, 270, 285, 300, 315, 330, 345, 360, 375, 390, 405, 420, 435, 450, 465, 480, 495, 500
     ]
     
-    # 從目前的 Balance 數據庫中動態抓取「所有已登記同事嘅英文名」作為選單基礎
+    # 獲取所有已登記名冊
     registered_staff_list = sorted(list(st.session_state.balance_database.keys()))
     
     with st.container():
@@ -89,16 +89,27 @@ if role == "Staff Portal (前線同事申報)":
         
         col1, col2 = st.columns(2)
         with col1:
-            # 🌟 核心升級：將手打 Text Input 換成可手打過濾、自動感應的 selectbox
-            # 如果名冊為空，會提示經理先匯入
             if not registered_staff_list:
                 st.error("⚠️ No staff database found. Please ask Manager to upload Name List Excel first.")
                 staff_name = ""
             else:
-                staff_name = st.selectbox(
-                    "Select Your Name / 請選擇你的姓名 (可直接打英文字母搜尋):", 
-                    options=["-- Please Select Your Name --"] + registered_staff_list
-                )
+                # 🌟 【精品級優化】新增一個顯眼的手打過濾文字框
+                search_query = st.text_input("🔍 Search Your Name / 輸入名字關鍵字搜尋 (例如: Tiko):", placeholder="Type to filter...").strip()
+                
+                # 根據輸入動態過濾名字
+                if search_query:
+                    filtered_list = [name for name in registered_staff_list if search_query.lower() in name.lower()]
+                    if not filtered_list:
+                        st.warning("❌ No matching staff found. Please check spelling.")
+                        filtered_options = ["-- No Match Found --"]
+                    else:
+                        filtered_options = ["-- Please Select From Filtered Result --"] + filtered_list
+                else:
+                    # 未輸入時，顯示全名冊
+                    filtered_options = ["-- Please Select Your Name --"] + registered_staff_list
+                
+                # 下拉選單只顯示過濾後的結果，解決打名行不見了的問題
+                staff_name = st.selectbox("Select Your Name / 請點擊確認你的姓名:", options=filtered_options)
                 
             dept = st.selectbox("Department (所屬部門):", ["Leather Goods", "Ready-to-Wear", "Silk & Accessories", "Watches & Fine Jewelry", "Operations/Stock"])
         with col2:
@@ -106,7 +117,7 @@ if role == "Staff Portal (前線同事申報)":
             ot_mins = st.selectbox("OT Duration (加班分鐘):", minute_options, index=1)
             
         # 實時顯示選中同事目前的 Balance 狀況
-        if staff_name and staff_name != "-- Please Select Your Name --":
+        if staff_name and staff_name not in ["-- Please Select Your Name --", "-- Please Select From Filtered Result --", "-- No Match Found --"]:
             current_bal = st.session_state.balance_database[staff_name]
             st.info(f"💡 Hello {staff_name}! Your current OT Balance before this submission is: **{current_bal} Mins** ({current_bal/60:.1f} Hours)")
         
@@ -129,8 +140,8 @@ if role == "Staff Portal (前線同事申報)":
         submit_btn = st.button("Submit Request / 確認提交")
         
         if submit_btn:
-            if not staff_name or staff_name == "-- Please Select Your Name --" or ("Others" in reason_preset and not custom_reason):
-                st.error("❌ Please select your name and fill in all fields. / 請選擇姓名並填妥欄位。")
+            if not staff_name or staff_name in ["-- Please Select Your Name --", "-- Please Select From Filtered Result --", "-- No Match Found --"] or ("Others" in reason_preset and not custom_reason):
+                st.error("❌ Please search, select your correct name and fill in all fields. / 請確保已選取正確姓名。")
             else:
                 # 自動累加分鐘
                 st.session_state.balance_database[staff_name] += ot_mins
@@ -156,7 +167,7 @@ if role == "Staff Portal (前線同事申報)":
         st.write('</div>', unsafe_allow_html=True)
 
 # ==========================================
-# 5. 經理管理端：新增「Excel 批次上傳全店名冊」
+# 5. 經理管理端：Excel 批次上傳全店名冊
 # ==========================================
 else:
     st.subheader("🔑 Manager Operations & HR Export Portal")
@@ -165,15 +176,11 @@ else:
     if password == "hermes96":
         st.success("🔓 Authenticated Successfully - Store 96 Operations")
         
-        # ──────────────────────────────────────────
-        # 🌟 核心全新功能：經理上傳 Excel 名冊與初始 Balance
-        # ──────────────────────────────────────────
         st.write("---")
         st.write("### 📥 Bulk Import Staff Name List / 批次上傳全店名冊 Excel")
         
-        # 提供格式說明，等經理知道 Excel 點整
         with st.expander("💡 View Excel File Template / 查看 Excel 製作格式說明"):
-            st.write("請製作一個包含兩行欄位的 Excel 檔案（格式如下），即可一鍵匯入全店 96 人：")
+            st.write("請製作一個包含兩行欄位的 Excel 檔案（格式如下），即可一鍵匯入全店名冊：")
             template_df = pd.DataFrame([
                 {"Employee": "Tiko Poon", "Initial Balance (Mins)": 60},
                 {"Employee": "Angelababy Wong", "Initial Balance (Mins)": 0},
@@ -182,16 +189,12 @@ else:
             st.dataframe(template_df)
             st.caption("註：欄位英文字母必須 100% 相同（Employee、Initial Balance (Mins)）。")
 
-        # 手機上傳 Excel 檔案組件
         uploaded_excel = st.file_uploader("Upload Store Staff List Excel (.xlsx):", type=["xlsx"])
         
         if uploaded_excel is not None:
             try:
-                # 讀取經理上傳的 Excel
                 input_df = pd.read_excel(uploaded_excel)
-                
                 if "Employee" in input_df.columns and "Initial Balance (Mins)" in input_df.columns:
-                    # 清空現有測試 Balance 庫，全面套用 Excel 內的名冊
                     new_balances = {}
                     for _, row in input_df.iterrows():
                         name = str(row["Employee"]).strip()
@@ -203,13 +206,11 @@ else:
                     st.success(f"🎉 Successfully imported {len(new_balances)} employees from Excel! Frontline portal menu updated.")
                     st.rerun()
                 else:
-                    st.error("❌ Invalid Excel format. Please ensure the column names are precisely 'Employee' and 'Initial Balance (Mins)'.")
+                    st.error("❌ Invalid Excel format. Please ensure columns are 'Employee' and 'Initial Balance (Mins)'.")
             except Exception as e:
                 st.error(f"❌ Error processing file: {str(e)}")
 
-        # ──────────────────────────────────────────
         # 手動單個修改 Balance
-        # ──────────────────────────────────────────
         st.write("---")
         st.write("### ⚙️ Adjust Single Balance / 手動個別修正餘額")
         
@@ -230,9 +231,7 @@ else:
         balance_df_show = pd.DataFrame([{"Employee": k, "OT Balance (Mins)": v, "In Hours": f"{v/60:.1f} Hrs"} for k, v in st.session_state.balance_database.items()])
         st.dataframe(balance_df_show, use_container_width=True)
         
-        # ──────────────────────────────────────────
         # 審批明細與 Excel 匯出
-        # ──────────────────────────────────────────
         st.write("---")
         st.write("### 📥 Pending Requests List")
         
