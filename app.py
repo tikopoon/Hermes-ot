@@ -4,38 +4,62 @@ from datetime import datetime
 import io
 
 # ==========================================
-# 1. 奢華視覺風格設定 (Hermès Orange)
+# 1. 奢華視覺風格設定 (Full Hermès Orange Background)
 # ==========================================
 st.set_page_config(page_title="Hermès Store 96 - OT Portal", page_icon="🍊", layout="centered")
 
-# 修正後的網頁風格注入
+# 將背景完全變成愛馬仕橙，文字變成白色，並保持中間卡片為純白
 st.markdown("""
     <style>
-    .stApp { background-color: #F8F9FA; }
-    h1, h2, h3 { color: #F37021 !important; font-family: 'Helvetica Neue', Arial, sans-serif; }
+    /* 全局背景變成愛馬仕橙色 */
+    .stApp { 
+        background-color: #F37021 !important; 
+    }
     
-    /* 愛馬仕橙色大按鈕 */
+    /* 網頁主標題和副標題改為白色，在橙色背景下最優雅清晰 */
+    h1, h2, h3, p, span, label { 
+        color: #FFFFFF !important; 
+        font-family: 'Helvetica Neue', Arial, sans-serif; 
+    }
+    
+    /* 側邊欄風格調整 */
+    [data-testid="stSidebar"] {
+        background-color: #333333 !important;
+    }
+    [data-testid="stSidebar"] * {
+        color: #FFFFFF !important;
+    }
+    
+    /* 中間的填寫表單卡片：維持純白立體感，內部文字用深灰色確保易讀 */
+    .luxury-card {
+        background-color: #FFFFFF !important;
+        padding: 25px;
+        border-radius: 12px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.15);
+        margin-bottom: 20px;
+    }
+    
+    /* 卡片內部的標籤、文字和選項全部強制用深灰色 (#333333) */
+    .luxury-card div, .luxury-card label, .luxury-card p, .luxury-card span {
+        color: #333333 !important;
+    }
+    
+    /* 卡片內部的提交按鈕：維持橙底白字 */
     div.stButton > button:first-child {
-        background-color: #F37021;
-        color: white;
-        border-radius: 4px;
+        background-color: #F37021 !important;
+        color: white !important;
+        border-radius: 6px;
         border: none;
         font-weight: bold;
-        padding: 10px 20px;
+        padding: 12px 20px;
         width: 100%;
+        box-shadow: 0 4px 12px rgba(243,112,33,0.3);
     }
-    
-    /* 卡片式容器 */
-    .luxury-card {
-        background-color: white;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
-        border-left: 5px solid #F37021;
-        margin-bottom: 15px;
+    div.stButton > button:first-child:hover { 
+        background-color: #D65A18 !important; 
     }
     </style>
-""", unsafe_allow_html=True) # 🌟 修正後的正確官方語法
+""", unsafe_allow_html=True)
 
 # ==========================================
 # 2. 數據庫初始化
@@ -58,28 +82,32 @@ if 'ot_database' not in st.session_state:
 # ==========================================
 # 3. 導航介面
 # ==========================================
-st.title("🍊 HERMÈS STORE 96 - O.T. PORTAL")
+st.title("🍊 HERMÈS STORE 96")
+st.write("### O.T. PORTAL")
 st.caption("Elegant Workforce Efficiency Management System")
 st.write("---")
 
 role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal (前線同事申報)", "Manager Portal (經理審批管理)"])
 
 # ==========================================
-# 4. 前線同事快速申報端
+# 4. 前線同事快速申報端 (500分鐘制)
 # ==========================================
 if role == "Staff Portal (前線同事申報)":
-    st.subheader("📝 OT Submission / 快速申報加班")
+    # 建立 15 分鐘到 500 分鐘的精準選項
+    minute_options = [15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 210, 240, 270, 300, 330, 360, 400, 450, 500]
     
     with st.container():
         st.write('<div class="luxury-card">', unsafe_allow_html=True)
+        st.write('<h3 style="color:#F37021 !important; margin-top:0;">📝 OT Submission / 快速申報</h3>', unsafe_allow_html=True)
         
         col1, col2 = st.columns(2)
         with col1:
-            staff_name = st.text_input("Employee Name (英文全名):", placeholder="e.g. Tom Chan")
+            staff_name = st.text_input("Employee Name (英文全名):", placeholder="e.g. Tiko Poon")
             dept = st.selectbox("Department (所屬部門):", ["Leather Goods", "Ready-to-Wear", "Silk & Accessories", "Watches & Fine Jewelry", "Operations/Stock"])
         with col2:
             ot_date = st.date_input("OT Date (加班日期):", max_value=datetime.today())
-            ot_mins = st.selectbox("OT Duration (加班分鐘):", [15, 30, 45, 60, 75, 90, 120, 150, 180], index=1)
+            # 升級：支援最高 500 分鐘
+            ot_mins = st.selectbox("OT Duration (加班分鐘):", minute_options, index=1)
         
         reason_preset = st.radio(
             "Quick Reason Select / 加班原因快捷鍵:", 
@@ -138,7 +166,7 @@ else:
         with col_m1:
             st.metric(label="⏳ Pending Approval / 待處理審批", value=f"{pending_count} Requests")
         with col_m2:
-            st.metric(label="📊 Approved OT This Month", value=f"{total_mins} Mins")
+            st.metric(label="📊 Approved OT This Month", value=f"{total_mins} Mins ({total_mins/60:.1f} Hours)")
             
         st.write("---")
         st.write("### 📥 Pending Requests List")
@@ -151,7 +179,8 @@ else:
             for index, row in pending_df.iterrows():
                 st.write(f"""
                 <div class="luxury-card">
-                    <strong>👤 Employee:</strong> {row['Employee Name']} ({row['Department']}) <br>
+                    <h4 style="color:#F37021; margin-top:0;">👤 Employee: {row['Employee Name']}</h4>
+                    <strong>Department:</strong> {row['Department']} <br>
                     <strong>📅 Date:</strong> {row['Date']} | <strong>⏰ Duration:</strong> {row['OT Duration (Minutes)']} Mins <br>
                     <strong>💡 Details:</strong> {row['Reason / Details']}
                 </div>
