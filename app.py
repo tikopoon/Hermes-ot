@@ -30,6 +30,14 @@ st.markdown("""
         border-left: 5px solid #F37021;
         margin-bottom: 15px;
     }
+    /* 綠色 OK 確定按鈕專用樣式 */
+    div.element-container:has(button[key="clear_success_btn"]) button {
+        background-color: #28A745 !important;
+        color: white !important;
+    }
+    div.element-container:has(button[key="clear_success_btn"]) button:hover {
+        background-color: #218838 !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -63,6 +71,12 @@ if 'ot_database' not in st.session_state:
 if 'selected_staff' not in st.session_state:
     st.session_state.selected_staff = ""
 
+# 🌟 用來記錄當前是否處於「提交成功、正等待按確定解鎖」的狀態
+if 'show_success_block' not in st.session_state:
+    st.session_state.show_success_block = False
+if 'last_submit_msg' not in st.session_state:
+    st.session_state.last_submit_msg = ""
+
 # ==========================================
 # 3. 導航介面
 # ==========================================
@@ -78,121 +92,137 @@ role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal 
 if role == "Staff Portal (前線同事申報)":
     st.subheader("📝 OT / CO Submission (快速申報加班/補鐘放假)")
     
-    # 生成包含負數和正數、以15分鐘為單位的選單
-    negative_options = list(range(-450, 0, 15))
-    positive_options = list(range(15, 510, 15))
-    if positive_options[-1] > 500:
-        positive_options[-1] = 500
+    # 🌟 判斷：如果剛剛提交完，直接顯示超大提示和確定按鈕，把填表單藏起來！
+    if st.session_state.show_success_block:
+        st.write('<div class="luxury-card" style="border-left: 5px solid #28A745;">', unsafe_allow_html=True)
+        st.success(st.session_state.last_submit_msg)
+        st.markdown("<h4 style='color: #28A745; text-align: center;'>🎉 提交成功！請點擊下方按鈕以進行下一次申報</h4>", unsafe_allow_html=True)
+        st.write("<br>", unsafe_allow_html=True)
         
-    minute_options = negative_options + positive_options
-    
-    # 🌟 滿足需求：極簡顯示格式，只保留 「+數字 Mins (OT)」與「-數字 Mins (CO)」
-    display_labels = {}
-    for mins in minute_options:
-        if mins > 0:
-            display_labels[mins] = f"+{mins} Mins (OT)"
-        else:
-            display_labels[mins] = f"{mins} Mins (CO)"
-
-    registered_staff_list = sorted(list(st.session_state.balance_database.keys()))
-    
-    with st.container():
-        st.write('<div class="luxury-card">', unsafe_allow_html=True)
+        # 綠色確定解鎖按鈕
+        if st.button("OK / 確定", key="clear_success_btn"):
+            st.session_state.show_success_block = False  # 解鎖
+            st.session_state.last_submit_msg = ""
+            st.rerun()
+        st.write('</div>', unsafe_allow_html=True)
         
-        col1, col2 = st.columns(2)
-        with col1:
-            if not registered_staff_list:
-                st.error("⚠️ No staff database found. Please ask Manager to upload Name List Excel first.")
-                staff_name = ""
+    else:
+        # 正常填表狀態
+        negative_options = list(range(-450, 0, 15))
+        positive_options = list(range(15, 510, 15))
+        if positive_options[-1] > 500:
+            positive_options[-1] = 500
+            
+        minute_options = negative_options + positive_options
+        
+        display_labels = {}
+        for mins in minute_options:
+            if mins > 0:
+                display_labels[mins] = f"+{mins} Mins (OT)"
             else:
-                typed_name = st.text_input(
-                    "Employee Name / 姓名 (在此輸入字母，下方會自動跳出對應人名):", 
-                    value=st.session_state.selected_staff,
-                    placeholder="Type to search (e.g. T)"
+                display_labels[mins] = f"{mins} Mins (CO)"
+
+        registered_staff_list = sorted(list(st.session_state.balance_database.keys()))
+        
+        with st.container():
+            st.write('<div class="luxury-card">', unsafe_allow_html=True)
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                if not registered_staff_list:
+                    st.error("⚠️ No staff database found. Please ask Manager to upload Name List Excel first.")
+                    staff_name = ""
+                else:
+                    typed_name = st.text_input(
+                        "Employee Name / 姓名 (在此輸入字母，下方會自動跳出對應人名):", 
+                        value=st.session_state.selected_staff,
+                        placeholder="Type to search (e.g. T)"
+                    )
+                    
+                    if typed_name:
+                        matches = [name for name in registered_staff_list if typed_name.lower() in name.lower()]
+                        if matches and (len(matches) > 1 or matches[0] != typed_name):
+                            st.caption("🎯 點擊下方名字快速填入 / Click name below to auto-complete:")
+                            cols = st.columns(min(len(matches), 4))
+                            for idx, match in enumerate(matches[:4]):
+                                with cols[idx % 4]:
+                                    if st.button(f"👤 {match}", key=f"suggest_{match}"):
+                                        st.session_state.selected_staff = match
+                                        st.rerun()
+                        elif not matches:
+                            st.warning("❌ 沒有找到相符的同事名字。")
+                    
+                    staff_name = typed_name
+                    
+                dept = st.selectbox("Department (所屬部門):", ["Leather Goods", "Ready-to-Wear", "Silk & Accessories", "Watches & Fine Jewelry", "Operations/Stock"])
+            
+            with col2:
+                ot_date = st.date_input("OT / CO Date (日期):", max_value=datetime.today())
+                
+                selected_mins = st.selectbox(
+                    "OT / CO 申請 (下拉往上滑可選擇負數補鐘):", 
+                    options=minute_options, 
+                    index=len(negative_options), 
+                    format_func=lambda x: display_labels[x]
                 )
                 
-                if typed_name:
-                    matches = [name for name in registered_staff_list if typed_name.lower() in name.lower()]
-                    if matches and (len(matches) > 1 or matches[0] != typed_name):
-                        st.caption("🎯 點擊下方名字快速填入 / Click name below to auto-complete:")
-                        cols = st.columns(min(len(matches), 4))
-                        for idx, match in enumerate(matches[:4]):
-                            with cols[idx % 4]:
-                                if st.button(f"👤 {match}", key=f"suggest_{match}"):
-                                    st.session_state.selected_staff = match
-                                    st.rerun()
-                    elif not matches:
-                        st.warning("❌ 沒有找到相符的同事名字。")
+            if staff_name in st.session_state.balance_database:
+                current_bal = st.session_state.balance_database[staff_name]
+                st.info(f"💡 Hello {staff_name}! Your current Balance before this submission is: **{current_bal} Mins** ({current_bal/60:.1f} Hours)")
                 
-                staff_name = typed_name
-                
-            dept = st.selectbox("Department (所屬部門):", ["Leather Goods", "Ready-to-Wear", "Silk & Accessories", "Watches & Fine Jewelry", "Operations/Stock"])
-        
-        with col2:
-            ot_date = st.date_input("OT / CO Date (日期):", max_value=datetime.today())
+                if selected_mins < 0 and current_bal + selected_mins < 0:
+                    st.warning(f"⚠️ Warning: 餘額將會變成負數")
             
-            # 簡潔版選單
-            selected_mins = st.selectbox(
-                "OT / CO 申請 (下拉往上滑可選擇負數補鐘):", 
-                options=minute_options, 
-                index=len(negative_options), # 預設停在第一個正數（+15 Mins (OT)）
-                format_func=lambda x: display_labels[x]
+            reason_preset = st.radio(
+                "Quick Reason Select / 原因快捷鍵:", 
+                [
+                    "VIP Client Service Extension (接待大客延時 OT)", 
+                    "Late Counter Closing & Handover (店舖收尾交更 OT)", 
+                    "Compensation Leave (申請放補鐘假 CO)", 
+                    "Others (請在下方以英文或中文輸入具體原因)"
+                ]
             )
             
-        if staff_name in st.session_state.balance_database:
-            current_bal = st.session_state.balance_database[staff_name]
-            st.info(f"💡 Hello {staff_name}! Your current Balance before this submission is: **{current_bal} Mins** ({current_bal/60:.1f} Hours)")
-            
-            if selected_mins < 0 and current_bal + selected_mins < 0:
-                st.warning(f"⚠️ Warning: 餘額將會變成負數")
-        
-        reason_preset = st.radio(
-            "Quick Reason Select / 原因快捷鍵:", 
-            [
-                "VIP Client Service Extension (接待大客延時 OT)", 
-                "Late Counter Closing & Handover (店舖收尾交更 OT)", 
-                "Compensation Leave (申請放補鐘假 CO)", 
-                "Others (請在下方以英文或中文輸入具體原因)"
-            ]
-        )
-        
-        custom_reason = ""
-        if "Others" in reason_preset:
-            custom_reason = st.text_input("Please enter details / 請填寫具體原因:")
-        else:
-            custom_reason = reason_preset
-
-        submit_btn = st.button("Submit Request / 確認提交")
-        
-        if submit_btn:
-            if not staff_name or staff_name not in st.session_state.balance_database or ("Others" in reason_preset and not custom_reason):
-                st.error("❌ Please input or click a valid employee name. / 請確保姓名正確。")
+            custom_reason = ""
+            if "Others" in reason_preset:
+                custom_reason = st.text_input("Please enter details / 請填寫具體原因:")
             else:
-                st.session_state.balance_database[staff_name] += selected_mins
-                updated_bal = st.session_state.balance_database[staff_name]
-                
-                submission_type = "OT" if selected_mins > 0 else "CO"
-                new_id = f"OTCO-2026-{len(st.session_state.ot_database) + 1:04d}"
-                new_data = {
-                    "Submission ID": new_id,
-                    "Date": str(ot_date),
-                    "Employee Name": staff_name,
-                    "Department": dept,
-                    "OT / CO Type": submission_type,
-                    "Duration (Minutes)": selected_mins,
-                    "Reason / Details": custom_reason,
-                    "Approved By": "Pending Approval",
-                    "Approval Status": "Pending",
-                    "Current Balance (Mins)": updated_bal,
-                    "Submission Time": datetime.now().strftime("%Y-%m-%d %H:%M")
-                }
-                st.session_state.ot_database = pd.concat([st.session_state.ot_database, pd.DataFrame([new_data])], ignore_index=True)
-                
-                st.session_state.selected_staff = ""
-                st.success(f"🎉 Submitted successfully! ({submission_type}: {selected_mins} Mins). Your updated Balance is: {updated_bal} Mins.")
-                st.rerun()
-                
-        st.write('</div>', unsafe_allow_html=True)
+                custom_reason = reason_preset
+
+            submit_btn = st.button("Submit Request / 確認提交")
+            
+            if submit_btn:
+                if not staff_name or staff_name not in st.session_state.balance_database or ("Others" in reason_preset and not custom_reason):
+                    st.error("❌ Please input or click a valid employee name. / 請確保姓名正確。")
+                else:
+                    # 執行數據加減
+                    st.session_state.balance_database[staff_name] += selected_mins
+                    updated_bal = st.session_state.balance_database[staff_name]
+                    
+                    submission_type = "OT" if selected_mins > 0 else "CO"
+                    new_id = f"OTCO-2026-{len(st.session_state.ot_database) + 1:04d}"
+                    new_data = {
+                        "Submission ID": new_id,
+                        "Date": str(ot_date),
+                        "Employee Name": staff_name,
+                        "Department": dept,
+                        "OT / CO Type": submission_type,
+                        "Duration (Minutes)": selected_mins,
+                        "Reason / Details": custom_reason,
+                        "Approved By": "Pending Approval",
+                        "Approval Status": "Pending",
+                        "Current Balance (Mins)": updated_bal,
+                        "Submission Time": datetime.now().strftime("%Y-%m-%d %H:%M")
+                    }
+                    st.session_state.ot_database = pd.concat([st.session_state.ot_database, pd.DataFrame([new_data])], ignore_index=True)
+                    
+                    # 🌟 觸發防呆鎖：不直接重置網頁，而是切換成「成功畫面」
+                    st.session_state.selected_staff = ""
+                    st.session_state.last_submit_msg = f"### 📬 傳送成功！\n* **員工姓名:** {staff_name}\n* **申請類別:** {submission_type}\n* **申請時數:** {selected_mins} 分鐘\n* **最新餘額 (預計):** {updated_bal} 分鐘"
+                    st.session_state.show_success_block = True
+                    st.rerun()
+                    
+            st.write('</div>', unsafe_allow_html=True)
 
 # ==========================================
 # 5. 經理管理端 (密碼: hermes96)
@@ -232,7 +262,7 @@ else:
         with col_b1:
             target_staff = st.text_input("Enter Employee Name:").strip()
         with col_b2:
-            new_balance_input = st.number_input("Set New Balance (Minutes):", min_value=-1000, value=0, step=15)
+            new_balance_input = int(st.number_input("Set New Balance (Minutes):", min_value=-1000, value=0, step=15))
             
         if st.button("💾 Update / 儲存更新"):
             if target_staff:
