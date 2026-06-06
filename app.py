@@ -34,7 +34,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 數據庫初始化 (與 Session State 綁定)
+# 2. 數據庫初始化
 # ==========================================
 if 'balance_database' not in st.session_state:
     st.session_state.balance_database = {
@@ -69,7 +69,7 @@ st.write("---")
 role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal (前線同事申報)", "Manager Portal (經理審批管理)"])
 
 # ==========================================
-# 4. 前線同事端：完美「合體單一欄位」自動提示
+# 4. 前線同事端：完美單一欄位、原地打字即彈提示
 # ==========================================
 if role == "Staff Portal (前線同事申報)":
     st.subheader("📝 OT Submission / 快速申報加班")
@@ -79,7 +79,6 @@ if role == "Staff Portal (前線同事申報)":
         255, 270, 285, 300, 315, 330, 345, 360, 375, 390, 405, 420, 435, 450, 465, 480, 495, 500
     ]
     
-    # 獲取所有已登記名冊
     registered_staff_list = sorted(list(st.session_state.balance_database.keys()))
     
     with st.container():
@@ -91,25 +90,12 @@ if role == "Staff Portal (前線同事申報)":
                 st.error("⚠️ No staff database found. Please ask Manager to upload Name List Excel first.")
                 staff_name = ""
             else:
-                # 🌟 完美解決方案：將輸入框與 HTML5 的 datalist 自適應綁定！
-                # 呢度用手寫 HTML 注入，創造出【得一欄、打字下方自動跳人名選單】嘅頂級手機效果
-                search_input = st.text_input("Employee Name / 姓名 (打字會自動跳出名字提示):", placeholder="e.g. Tiko Poon").strip()
-                
-                # 在後台動態生成 HTML5 提示清單
-                datalist_options = "".join([f'<option value="{name}">' for name in registered_staff_list])
-                st.markdown(f'<datalist id="staff_names">{datalist_options}</datalist>', unsafe_allow_html=True)
-                
-                # 透過 JavaScript 實時把這個清單綁定到 Streamlit 唯一的文字框上
-                st.markdown("""
-                    <script>
-                    var inputs = window.parent.document.querySelectorAll('input[aria-label*="打字會自動跳出名字提示"]');
-                    inputs.forEach(function(input) {
-                        input.setAttribute("list", "staff_names");
-                    });
-                    </script>
-                """, unsafe_allow_html=True)
-                
-                staff_name = search_input
+                # 🌟 滿足要求：重新融合成【單一欄位】。
+                # 提示語明確指引：點擊後直接用鍵盤打 T 字即可原地篩選
+                staff_name = st.selectbox(
+                    "Employee Name / 姓名 (點擊並打字搜尋自己名字):", 
+                    options=["-- Please Select Your Name --"] + registered_staff_list
+                )
                 
             dept = st.selectbox("Department (所屬部門):", ["Leather Goods", "Ready-to-Wear", "Silk & Accessories", "Watches & Fine Jewelry", "Operations/Stock"])
         with col2:
@@ -117,11 +103,9 @@ if role == "Staff Portal (前線同事申報)":
             ot_mins = st.selectbox("OT Duration (加班分鐘):", minute_options, index=1)
             
         # 實時顯示選中同事目前的 Balance 狀況
-        if staff_name in st.session_state.balance_database:
+        if staff_name and staff_name != "-- Please Select Your Name --":
             current_bal = st.session_state.balance_database[staff_name]
             st.info(f"💡 Hello {staff_name}! Your current OT Balance before this submission is: **{current_bal} Mins** ({current_bal/60:.1f} Hours)")
-        elif staff_name != "":
-            st.warning(f"⚠️ '{staff_name}' is not matched in the current store registry. Please ensure accuracy.")
         
         reason_preset = st.radio(
             "Quick Reason Select / 加班原因快捷鍵:", 
@@ -142,10 +126,9 @@ if role == "Staff Portal (前線同事申報)":
         submit_btn = st.button("Submit Request / 確認提交")
         
         if submit_btn:
-            if not staff_name or staff_name not in st.session_state.balance_database or ("Others" in reason_preset and not custom_reason):
-                st.error("❌ Please input a valid registered employee name and fill all fields. / 請確保姓名正確並在全店名冊內。")
+            if not staff_name or staff_name == "-- Please Select Your Name --" or ("Others" in reason_preset and not custom_reason):
+                st.error("❌ Please select your name and fill in all fields. / 請選取姓名。")
             else:
-                # 自動累加分鐘
                 st.session_state.balance_database[staff_name] += ot_mins
                 updated_bal = st.session_state.balance_database[staff_name]
                 
@@ -169,7 +152,7 @@ if role == "Staff Portal (前線同事申報)":
         st.write('</div>', unsafe_allow_html=True)
 
 # ==========================================
-# 5. 經理管理端：Excel 批次上傳全店名冊
+# 5. 經理管理端 (密碼: hermes96)
 # ==========================================
 else:
     st.subheader("🔑 Manager Operations & HR Export Portal")
@@ -185,11 +168,9 @@ else:
             st.write("請製作一個包含兩行欄位的 Excel 檔案（格式如下），即可一鍵匯入全店名冊：")
             template_df = pd.DataFrame([
                 {"Employee": "Tiko Poon", "Initial Balance (Mins)": 60},
-                {"Employee": "Angelababy Wong", "Initial Balance (Mins)": 0},
-                {"Employee": "David Beckham", "Initial Balance (Mins)": 15}
+                {"Employee": "Angelababy Wong", "Initial Balance (Mins)": 0}
             ])
             st.dataframe(template_df)
-            st.caption("註：欄位英文字母必須 100% 相同（Employee、Initial Balance (Mins)）。")
 
         uploaded_excel = st.file_uploader("Upload Store Staff List Excel (.xlsx):", type=["xlsx"])
         
@@ -205,12 +186,12 @@ else:
                             new_balances[name] = bal
                     
                     st.session_state.balance_database = new_balances
-                    st.success(f"🎉 Successfully imported {len(new_balances)} employees from Excel! Frontline portal menu updated.")
+                    st.success(f"🎉 Successfully imported {len(new_balances)} employees!")
                     st.rerun()
                 else:
-                    st.error("❌ Invalid Excel format. Please ensure columns are 'Employee' and 'Initial Balance (Mins)'.")
+                    st.error("❌ Excel 格式不對，必須包含 'Employee' 和 'Initial Balance (Mins)' 欄位。")
             except Exception as e:
-                st.error(f"❌ Error processing file: {str(e)}")
+                st.error(f"❌ 讀取失敗: {str(e)}")
 
         # 手動單個修改 Balance
         st.write("---")
@@ -225,7 +206,7 @@ else:
         if st.button("💾 Update / 儲存更新"):
             if target_staff:
                 st.session_state.balance_database[target_staff] = new_balance_input
-                st.success(f"✅ Successfully updated {target_staff}'s balance to {new_balance_input} Mins!")
+                st.success(f"✅ Successfully updated {target_staff}'s balance!")
                 st.rerun()
                 
         # 展示目前所有人的假總數
@@ -246,16 +227,13 @@ else:
             for index, row in pending_df.iterrows():
                 st.write(f"""
                 <div class="luxury-card">
-                    <strong>👤 Employee:</strong> {row['Employee Name']} ({row['Department']}) <br>
-                    <strong>📅 Date:</strong> {row['Date']} | <strong>⏰ Duration:</strong> {row['OT Duration (Minutes)']} Mins <br>
-                    <strong>💡 Details:</strong> {row['Reason / Details']}
+                    <strong>👤 Employee:</strong> {row['Employee Name']} <br>
+                    <strong>⏰ Duration:</strong> {row['OT Duration (Minutes)']} Mins
                 </div>
                 """, unsafe_allow_html=True)
                 
                 if st.button(f"✓ Approve {row['Employee Name']}", key=f"app_{row['Submission ID']}"):
                     st.session_state.ot_database.loc[st.session_state.ot_database["Submission ID"] == row['Submission ID'], "Approval Status"] = "Approved"
-                    st.session_state.ot_database.loc[st.session_state.ot_database["Submission ID"] == row['Submission ID'], "Approved By"] = "Store Manager"
-                    st.toast(f"Request {row['Submission ID']} Approved!")
                     st.rerun()
                     
         st.write("---")
