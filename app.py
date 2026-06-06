@@ -8,13 +8,10 @@ import io
 # ==========================================
 st.set_page_config(page_title="Hermès Store 96 - OT Portal", page_icon="🍊", layout="centered")
 
-# 回歸最耐看、最舒適的灰白背景，並以愛馬仕橙作為尊貴點綴
+# 低調奢華之灰白背景 + 愛馬仕橙點綴
 st.markdown("""
     <style>
-    /* 灰白底色，提供前線最舒適的閱讀體驗 */
     .stApp { background-color: #F8F9FA; }
-    
-    /* 標題使用標誌性愛馬仕橙 */
     h1, h2, h3 { color: #F37021 !important; font-family: 'Helvetica Neue', Arial, sans-serif; }
     
     /* 愛馬仕橙色大按鈕 */
@@ -31,7 +28,7 @@ st.markdown("""
         background-color: #D65A18;
     }
     
-    /* 卡片式容器：立體純白，帶有橙色滾邊 */
+    /* 卡片式容器 */
     .luxury-card {
         background-color: white;
         padding: 20px;
@@ -71,13 +68,16 @@ st.write("---")
 role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal (前線同事申報)", "Manager Portal (經理審批管理)"])
 
 # ==========================================
-# 4. 前線同事快速申報端 (保留 500 分鐘制)
+# 4. 前線同事快速申報端 (全 15 分鐘遞增單位)
 # ==========================================
 if role == "Staff Portal (前線同事申報)":
     st.subheader("📝 OT Submission / 快速申報加班")
     
-    # 15 分鐘至 500 分鐘的精準選項
-    minute_options = [15, 30, 45, 60, 75, 90, 105, 120, 150, 180, 210, 240, 270, 300, 330, 360, 400, 450, 500]
+    # 🌟 升級：全部嚴格以 15 分鐘為單位，一直加到 500 分鐘為止
+    minute_options = [
+        15, 30, 45, 60, 75, 90, 105, 120, 135, 150, 165, 180, 195, 210, 225, 240, 
+        255, 270, 285, 300, 315, 330, 345, 360, 375, 390, 405, 420, 435, 450, 465, 480, 495, 500
+    ]
     
     with st.container():
         st.write('<div class="luxury-card">', unsafe_allow_html=True)
@@ -88,7 +88,7 @@ if role == "Staff Portal (前線同事申報)":
             dept = st.selectbox("Department (所屬部門):", ["Leather Goods", "Ready-to-Wear", "Silk & Accessories", "Watches & Fine Jewelry", "Operations/Stock"])
         with col2:
             ot_date = st.date_input("OT Date (加班日期):", max_value=datetime.today())
-            # 保留經理要求的 500 分鐘進階選項
+            # 預設維持 30 分鐘 (index=1)
             ot_mins = st.selectbox("OT Duration (加班分鐘):", minute_options, index=1)
         
         reason_preset = st.radio(
