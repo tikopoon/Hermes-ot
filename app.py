@@ -34,7 +34,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 數據庫初始化
+# 2. 數據庫初始化 (與 Session State 綁定)
 # ==========================================
 if 'balance_database' not in st.session_state:
     st.session_state.balance_database = {
@@ -69,7 +69,7 @@ st.write("---")
 role = st.sidebar.radio("Please Select Role / 請選擇身份:", ["Staff Portal (前線同事申報)", "Manager Portal (經理審批管理)"])
 
 # ==========================================
-# 4. 前線同事端：完美單一欄位、原地打字即彈提示
+# 4. 前線同事端：100% 穩定單一欄位、點擊流暢輸入過濾
 # ==========================================
 if role == "Staff Portal (前線同事申報)":
     st.subheader("📝 OT Submission / 快速申報加班")
@@ -79,6 +79,7 @@ if role == "Staff Portal (前線同事申報)":
         255, 270, 285, 300, 315, 330, 345, 360, 375, 390, 405, 420, 435, 450, 465, 480, 495, 500
     ]
     
+    # 動態抓取經理匯入的 Excel 名冊
     registered_staff_list = sorted(list(st.session_state.balance_database.keys()))
     
     with st.container():
@@ -90,10 +91,10 @@ if role == "Staff Portal (前線同事申報)":
                 st.error("⚠️ No staff database found. Please ask Manager to upload Name List Excel first.")
                 staff_name = ""
             else:
-                # 🌟 滿足要求：重新融合成【單一欄位】。
-                # 提示語明確指引：點擊後直接用鍵盤打 T 字即可原地篩選
+                # 🌟 官方最完美原生方案：只有單一欄位！
+                # 點擊後手機會流暢彈出鍵盤，打字（例如打 T）下面會原地過濾出名字。
                 staff_name = st.selectbox(
-                    "Employee Name / 姓名 (點擊並打字搜尋自己名字):", 
+                    "Employee Name / 姓名 (點擊直接輸入英文字母搜尋):", 
                     options=["-- Please Select Your Name --"] + registered_staff_list
                 )
                 
@@ -129,6 +130,7 @@ if role == "Staff Portal (前線同事申報)":
             if not staff_name or staff_name == "-- Please Select Your Name --" or ("Others" in reason_preset and not custom_reason):
                 st.error("❌ Please select your name and fill in all fields. / 請選取姓名。")
             else:
+                # 自動累加分鐘
                 st.session_state.balance_database[staff_name] += ot_mins
                 updated_bal = st.session_state.balance_database[staff_name]
                 
